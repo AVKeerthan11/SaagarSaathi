@@ -1,0 +1,162 @@
+.analytics-charts {
+  margin: 20px 0;
+  padding: 20px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.analytics-placeholder {
+  text-align: center;
+  padding: 40px 20px;
+  color: #6c757d;
+}
+
+.charts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 20px;
+  margin-top: 15px;
+}
+
+.chart-card {
+  background: #f8f9fa;
+  padding: 15px;
+  border-radius: 6px;
+  border-left: 4px solid #007bff;
+}
+
+.chart-card h5 {
+  margin: 0 0 15px 0;
+  color: #2c3e50;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* Sentiment Chart */
+.sentiment-chart {
+  display: flex;
+  height: 30px;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.sentiment-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 12px;
+  font-weight: 500;
+  transition: width 0.3s ease;
+}
+
+.sentiment-bar.positive { background: #28a745; }
+.sentiment-bar.neutral { background: #ffc107; color: #000; }
+.sentiment-bar.negative { background: #dc3545; }
+
+/* Hazard Distribution */
+.hazard-item {
+  display: flex;
+  align-items: center;
+  margin: 8px 0;
+  font-size: 12px;
+}
+
+.hazard-label {
+  width: 100px;
+  text-transform: capitalize;
+  font-weight: 500;
+}
+
+.hazard-bar-container {
+  flex: 1;
+  height: 8px;
+  background: #e9ecef;
+  border-radius: 4px;
+  margin: 0 10px;
+  overflow: hidden;
+}
+
+.hazard-bar {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.hazard-count {
+  width: 30px;
+  text-align: right;
+  font-weight: 600;
+}
+
+/* Confidence Metrics */
+.confidence-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.metric {
+  text-align: center;
+  padding: 10px;
+  background: white;
+  border-radius: 6px;
+  border: 1px solid #dee2e6;
+}
+
+.metric-label {
+  display: block;
+  font-size: 11px;
+  color: #6c757d;
+  margin-bottom: 5px;
+}
+
+.metric-value {
+  display: block;
+  font-size: 16px;
+  font-weight: 600;
+  color: #007bff;
+}
+
+/* Timeline Chart */
+.timeline-card {
+  grid-column: 1 / -1;
+}
+
+.timeline-chart {
+  display: flex;
+  justify-content: space-around;
+  align-items: flex-end;
+  height: 100px;
+  padding: 10px 0;
+}
+
+.timeline-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.timeline-date {
+  font-size: 10px;
+  color: #6c757d;
+  margin-bottom: 5px;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+}
+
+.timeline-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.timeline-bar {
+  width: 8px;
+  border-radius: 2px 2px 0 0;
+  transition: height 0.3s ease;
+}
+
+.timeline-bar.total { background: #6c757d; }
+.timeline-bar.hazard { background: #dc3545; margin-left: 2px; }
