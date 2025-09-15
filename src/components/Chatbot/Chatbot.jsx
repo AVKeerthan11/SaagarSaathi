@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
+import chatbotNLP from '../services/chatbotNLP';
 
 const Chatbot = ({ onClose }) => {
   const [messages, setMessages] = useState([
-    { sender: "bot", text: "Hi! 👋 I'm your OceanWatch assistant. How can I help you today?" }
+    { sender: "bot", text: "Hello! I'm your Ocean Safety Assistant. How can I help you with ocean hazards or beach safety today?" }
   ]);
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
@@ -15,30 +16,12 @@ const Chatbot = ({ onClose }) => {
     setInput("");
     setIsTyping(true);
 
-    // Simulate bot typing
+    // Process with NLP engine
     setTimeout(() => {
       setIsTyping(false);
-      
-      let reply = "I'm here to help with ocean hazard information. You can ask me about tsunamis, flooding, waves, or how to report hazards.";
-      
-      if (input.toLowerCase().includes("report")) {
-        reply = "You can submit a hazard report from the 'Report Hazard' section. I can guide you through the process if you need help!";
-      } else if (input.toLowerCase().includes("tsunami")) {
-        reply = "🚨 In case of tsunami warning: Move to higher ground immediately. Follow official evacuation routes. Do not return until authorities declare it's safe.";
-      } else if (input.toLowerCase().includes("wave") || input.toLowerCase().includes("high surf")) {
-        reply = "High waves can be dangerous. Avoid beach activities during high surf advisories. Never turn your back to the ocean.";
-      } else if (input.toLowerCase().includes("flood")) {
-        reply = "During coastal flooding: Avoid walking or driving through flood waters. Just 6 inches of moving water can knock you down.";
-      } else if (input.toLowerCase().includes("current")) {
-        reply = "If caught in a rip current: Stay calm. Don't fight the current. Swim parallel to the shore until you're out of the current, then swim to shore.";
-      } else if (input.toLowerCase().includes("storm")) {
-        reply = "During ocean storms: Stay indoors away from windows. Avoid beach areas. Monitor official weather sources for updates.";
-      } else if (input.toLowerCase().includes("thank")) {
-        reply = "You're welcome! Stay safe out there. 🌊";
-      }
-
-      setMessages(prev => [...prev, { sender: "bot", text: reply }]);
-    }, 1000 + Math.random() * 1000); // Random delay between 1-2 seconds
+      const response = chatbotNLP.processInput(input);
+      setMessages(prev => [...prev, { sender: "bot", text: response }]);
+    }, 800 + Math.random() * 800); // Simulate thinking time
   };
 
   const handleKeyPress = (e) => {
@@ -47,17 +30,20 @@ const Chatbot = ({ onClose }) => {
     }
   };
 
+  // Quick replies focused on ocean safety
   const quickReplies = [
-    "What should I do during a tsunami?",
-    "How to report high waves?",
-    "What are rip current safety tips?",
-    "How does coastal flooding work?"
+    "Tsunami safety tips",
+    "How to spot rip currents",
+    "Reporting a hazard",
+    "Beach conditions today",
+    "What to do during coastal flooding",
+    "Wave safety guidelines"
   ];
 
   return (
     <div className="floating-chatbot">
       <div className="chatbot-header">
-        <h3>🤖 OceanWatch Assistant</h3>
+        <h3>🌊 Ocean Safety Assistant</h3>
         <button onClick={onClose} className="close-btn">×</button>
       </div>
       
@@ -78,12 +64,15 @@ const Chatbot = ({ onClose }) => {
       </div>
       
       <div className="chat-suggestions">
-        <p style={{ margin: 0, fontSize: '12px', color: '#6c757d' }}>Quick questions:</p>
+        <p style={{ margin: 0, fontSize: '12px', color: '#6c757d' }}>Ask about:</p>
         <div className="suggestion-chips">
           {quickReplies.map((suggestion, i) => (
             <button 
               key={i} 
-              onClick={() => setInput(suggestion)}
+              onClick={() => {
+                setInput(suggestion);
+                setTimeout(() => handleSend(), 100);
+              }}
             >
               {suggestion}
             </button>
@@ -96,17 +85,17 @@ const Chatbot = ({ onClose }) => {
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyPress={handleKeyPress}
-          placeholder="Type your question..."
+          placeholder="Ask about ocean safety..."
           disabled={isTyping}
         />
-        <button onClick={handleSend} disabled={isTyping}>
+        <button onClick={handleSend} disabled={isTyping || !input.trim()}>
           Send
         </button>
       </div>
       
       <div className="chatbot-status">
         <span className="status-indicator"></span>
-        <span>Online</span>
+        <span>Ocean Safety Specialist</span>
       </div>
     </div>
   );

@@ -6,6 +6,7 @@ import L from 'leaflet';
 import SocialFeed from './components/SocialAnalytics/SocialFeed';
 import sentimentService from './services/sentimentService';
 import analyticsService from './services/analyticsService';
+import chatbotNLP from './services/chatbotNLP'; // Add this import
 
 const getHazardColor = (type) => {
   const colors = {
@@ -17,10 +18,11 @@ const getHazardColor = (type) => {
   };
   return colors[type] || '#6c757d';
 };
+
 const OceanWatch = () => {
-  const [userRole, setUserRole] = useState('citizen'); // citizen, official
+  const [userRole, setUserRole] = useState('citizen');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [currentView, setCurrentView] = useState('map'); // Start with map for citizens
+  const [currentView, setCurrentView] = useState('map');
   const [reports, setReports] = useState([]);
   const [hotspots, setHotspots] = useState([]);
   const [socialMediaData, setSocialMediaData] = useState([]);
@@ -99,15 +101,14 @@ const OceanWatch = () => {
       return 'other';
     };
 
-    // After definition, map to add 'confidence' and 'analysis' fields for each post
     const enrichedSocialMedia = mockSocialMedia.map(post => {
-      const sentimentResult = post.sentiment; // now an object {sentiment, confidence}
+      const sentimentResult = post.sentiment;
       return {
         ...post,
         sentiment: sentimentResult.sentiment,
         confidence: sentimentResult.confidence,
         analysis: {
-          hazardType: detectHazardType(post.text), // create or import a hazard detection function
+          hazardType: detectHazardType(post.text),
           confidence: sentimentResult.confidence
         }
       };
@@ -188,34 +189,28 @@ const OceanWatch = () => {
   );
 };
 
-// Floating Chatbot Component
+// Floating Chatbot Component - UPDATED VERSION
 const FloatingChatbot = ({ onClose }) => {
   const [messages, setMessages] = useState([
     { from: "bot", text: "Hi! I'm your Ocean Hazard Assistant. Ask me about ocean hazards 🌊" }
   ]);
   const [input, setInput] = useState("");
+  const [isTyping, setIsTyping] = useState(false);
 
   const handleSend = () => {
     if (!input.trim()) return;
-    
-    let reply = "I'm still learning about ocean hazards. For accurate information, please consult official sources.";
-    
-    if (input.toLowerCase().includes("tsunami")) {
-      reply = "🚨 In case of tsunami warning: Move to higher ground immediately. Follow official evacuation routes.";
-    } else if (input.toLowerCase().includes("wave") || input.toLowerCase().includes("high surf")) {
-      reply = "High waves can be dangerous. Avoid beach activities during high surf advisories.";
-    } else if (input.toLowerCase().includes("flood")) {
-      reply = "During coastal flooding: Avoid walking or driving through flood waters.";
-    } else if (input.toLowerCase().includes("current")) {
-      reply = "If caught in a rip current: Don't fight it. Swim parallel to shore to escape.";
-    } else if (input.toLowerCase().includes("storm")) {
-      reply = "During ocean storms: Stay indoors away from windows. Avoid beach areas.";
-    } else if (input.toLowerCase().includes("report")) {
-      reply = "You can report hazards using the 'Report Hazard' option in the main menu.";
-    }
-    
-    setMessages([...messages, { from: "user", text: input }, { from: "bot", text: reply }]);
+
+    // Add user message
+    setMessages(prev => [...prev, { from: "user", text: input }]);
     setInput("");
+    setIsTyping(true);
+
+    // Process with NLP engine - USE YOUR ADVANCED NLP SERVICE
+    setTimeout(() => {
+      setIsTyping(false);
+      const response = chatbotNLP.processInput(input);
+      setMessages(prev => [...prev, { from: "bot", text: response }]);
+    }, 800 + Math.random() * 800);
   };
 
   const handleKeyPress = (e) => {
@@ -224,10 +219,20 @@ const FloatingChatbot = ({ onClose }) => {
     }
   };
 
+  // Quick replies focused on ocean safety
+  const quickReplies = [
+    "Tsunami safety tips",
+    "How to spot rip currents",
+    "Reporting a hazard",
+    "Beach conditions today",
+    "What to do during coastal flooding",
+    "Wave safety guidelines"
+  ];
+
   return (
     <div className="floating-chatbot">
       <div className="chatbot-header">
-        <h3>🤖 Hazard Assistant</h3>
+        <h3>🌊 Ocean Safety Assistant</h3>
         <button onClick={onClose} className="close-btn">×</button>
       </div>
       
@@ -237,6 +242,31 @@ const FloatingChatbot = ({ onClose }) => {
             {m.text}
           </div>
         ))}
+        
+        {isTyping && (
+          <div className="typing-indicator">
+            <div className="typing-dot"></div>
+            <div className="typing-dot"></div>
+            <div className="typing-dot"></div>
+          </div>
+        )}
+      </div>
+      
+      <div className="chat-suggestions">
+        <p style={{ margin: 0, fontSize: '12px', color: '#6c757d' }}>Ask about:</p>
+        <div className="suggestion-chips">
+          {quickReplies.map((suggestion, i) => (
+            <button 
+              key={i} 
+              onClick={() => {
+                setInput(suggestion);
+                setTimeout(() => handleSend(), 100);
+              }}
+            >
+              {suggestion}
+            </button>
+          ))}
+        </div>
       </div>
       
       <div className="chatbot-input">
@@ -244,9 +274,17 @@ const FloatingChatbot = ({ onClose }) => {
           value={input} 
           onChange={(e) => setInput(e.target.value)}
           onKeyPress={handleKeyPress}
-          placeholder="Ask about ocean hazards..." 
+          placeholder="Ask about ocean safety..." 
+          disabled={isTyping}
         />
-        <button onClick={handleSend}>Send</button>
+        <button onClick={handleSend} disabled={isTyping || !input.trim()}>
+          Send
+        </button>
+      </div>
+      
+      <div className="chatbot-status">
+        <span className="status-indicator"></span>
+        <span>Ocean Safety Specialist</span>
       </div>
     </div>
   );
@@ -693,7 +731,7 @@ const ReportForm = ({ userRole, setCurrentView }) => {
                 <i className="fas fa-crosshairs"></i>
                 Use Current Location
               </button>
-              <button type="button" className="location-btn">
+                            <button type="button" className="location-btn">
                 <i className="fas fa-map-pin"></i>
                 Select on Map
               </button>
@@ -736,7 +774,7 @@ const ReportForm = ({ userRole, setCurrentView }) => {
             <h3>Final Step</h3>
             
             <div className="upload-section">
-              <label>Upload Photos or Videos (Optional)</label>
+              <label>Upload Photos or Videos (Optional</label>
               <div className="upload-area">
                 <i className="fas fa-cloud-upload-alt"></i>
                 <p>Click to browse or drag files here</p>
@@ -770,7 +808,7 @@ const ReportForm = ({ userRole, setCurrentView }) => {
   );
 };
 
-// Replace the AnalyticsDashboard component in your main file with this:
+// Analytics Dashboard Component
 const AnalyticsDashboard = ({ reports, socialMediaData, hotspots }) => {
   const [analyticsData, setAnalyticsData] = useState(null);
 
@@ -925,6 +963,7 @@ const AnalyticsDashboard = ({ reports, socialMediaData, hotspots }) => {
     </div>
   );
 };
+
 // Interactive Map Component
 const InteractiveMap = ({ reports, hotspots, socialMediaData }) => {
   const [activeFilters, setActiveFilters] = useState({
@@ -942,63 +981,62 @@ const InteractiveMap = ({ reports, hotspots, socialMediaData }) => {
       </div>
       
       <div className="map-container">
-       <div className="map-visualization">
-  <div className="map-stats">
-    <span>{reports.length} Reports</span>
-    <span>{hotspots.length} Hotspots</span>
-    <span>{socialMediaData.length} Social Posts</span>
-  </div>
+        <div className="map-visualization">
+          <div className="map-stats">
+            <span>{reports.length} Reports</span>
+            <span>{hotspots.length} Hotspots</span>
+            <span>{socialMediaData.length} Social Posts</span>
+          </div>
 
-  <MapContainer 
-    center={[17.6868, 83.2185]} // initial center
-    zoom={12} 
-    style={{ height: '500px', width: '100%' }}
-  >
-    <TileLayer
-      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-      attribution="&copy; OpenStreetMap contributors"
-    />
+          <MapContainer 
+            center={[17.6868, 83.2185]}
+            zoom={12} 
+            style={{ height: '500px', width: '100%' }}
+          >
+            <TileLayer
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              attribution="&copy; OpenStreetMap contributors"
+            />
 
-    {/* Citizen & Official Reports */}
-    {activeFilters.citizenReports && reports.map(report => (
-      <Marker key={`report-${report.id}`} position={[report.location.lat, report.location.lng]}>
-        <Popup>
-          <strong>{formatReportType(report.type)}</strong><br />
-          {report.description}<br />
-          Reported by: {report.reporter}
-        </Popup>
-      </Marker>
-    ))}
+            {/* Citizen & Official Reports */}
+            {activeFilters.citizenReports && reports.map(report => (
+              <Marker key={`report-${report.id}`} position={[report.location.lat, report.location.lng]}>
+                <Popup>
+                  <strong>{formatReportType(report.type)}</strong><br />
+                  {report.description}<br />
+                  Reported by: {report.reporter}
+                </Popup>
+              </Marker>
+            ))}
 
-    {/* Hotspots */}
-    {activeFilters.hotspots && hotspots.map(hotspot => (
-      <Marker 
-        key={`hotspot-${hotspot.id}`} 
-        position={[hotspot.location.lat, hotspot.location.lng]}
-        icon={L.divIcon({
-          className: 'hotspot-marker',
-          html: `<span>${hotspot.severity}</span>`
-        })}
-      >
-        <Popup>
-          <strong>Hotspot Severity: {hotspot.severity}</strong><br />
-          {hotspot.reportCount} reports
-        </Popup>
-      </Marker>
-    ))}
+            {/* Hotspots */}
+            {activeFilters.hotspots && hotspots.map(hotspot => (
+              <Marker 
+                key={`hotspot-${hotspot.id}`} 
+                position={[hotspot.location.lat, hotspot.location.lng]}
+                icon={L.divIcon({
+                  className: 'hotspot-marker',
+                  html: `<span>${hotspot.severity}</span>`
+                })}
+              >
+                <Popup>
+                  <strong>Hotspot Severity: {hotspot.severity}</strong><br />
+                  {hotspot.reportCount} reports
+                </Popup>
+              </Marker>
+            ))}
 
-    {/* Social Media */}
-    {activeFilters.socialMedia && socialMediaData.map(post => (
-      <Marker key={`post-${post.id}`} position={[post.location.lat, post.location.lng]}>
-        <Popup>
-          {post.text}<br />
-          Sentiment: {post.sentiment}
-        </Popup>
-      </Marker>
-    ))}
-  </MapContainer>
-</div>
-
+            {/* Social Media */}
+            {activeFilters.socialMedia && socialMediaData.map(post => (
+              <Marker key={`post-${post.id}`} position={[post.location.lat, post.location.lng]}>
+                <Popup>
+                  {post.text}<br />
+                  Sentiment: {post.sentiment}
+                </Popup>
+              </Marker>
+            ))}
+          </MapContainer>
+        </div>
         
         <div className="map-sidebar">
           <div className="filter-panel">
