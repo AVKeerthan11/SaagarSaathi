@@ -13,16 +13,21 @@ const SocialFeed = () => {
   const handleNewPost = useCallback((newPost) => {
     setPosts(prevPosts => {
       const updatedPosts = [newPost, ...prevPosts];
-      // Keep only latest 20 posts
-      return updatedPosts.length > 20 ? updatedPosts.slice(0, 20) : updatedPosts;
+      
+      // Update analytics immediately with new data
+      const newAnalytics = analyticsService.analyzePosts(updatedPosts);
+      setAnalyticsData(newAnalytics);
+      
+      // Keep only latest 50 posts for performance
+      return updatedPosts.length > 50 ? updatedPosts.slice(0, 50) : updatedPosts;
     });
   }, []);
 
-  // Update analytics when posts change
+  // Initialize analytics with current posts
   useEffect(() => {
-    const newAnalytics = analyticsService.analyzePosts(posts);
-    setAnalyticsData(newAnalytics);
-  }, [posts]);
+    const initialAnalytics = analyticsService.analyzePosts(posts);
+    setAnalyticsData(initialAnalytics);
+  }, []);
 
   const handleConnected = useCallback(() => {
     setIsConnected(true);
@@ -78,8 +83,24 @@ const SocialFeed = () => {
         </div>
       </div>
 
+      {/* Real-time Stats Overview */}
+      <div className="real-time-stats">
+        <div className="stat-item">
+          <span className="stat-number">{posts.length}</span>
+          <span className="stat-label">Total Posts</span>
+        </div>
+        <div className="stat-item">
+          <span className="stat-number">{analyticsData?.hazardPosts || 0}</span>
+          <span className="stat-label">Hazard Mentions</span>
+        </div>
+        <div className="stat-item">
+          <span className="stat-number">{analyticsData?.confidence?.average || 0}%</span>
+          <span className="stat-label">Avg Confidence</span>
+        </div>
+      </div>
+
       {/* Analytics Charts */}
-      <AnalyticsCharts analyticsData={analyticsData} />
+      {analyticsData && <AnalyticsCharts analyticsData={analyticsData} />}
 
       {/* Posts List */}
       <div className="posts-container">
@@ -104,11 +125,11 @@ const SocialFeed = () => {
                   {post.analysis.hazardType}
                 </span>
                 <span className="confidence">
-  {post.analysis && post.analysis.confidence
-    ? `${post.analysis.confidence}% confidence`
-    : 'Confidence data not available'}
-</span>
-
+                  {post.analysis.confidence}% confidence
+                </span>
+                <span className={`sentiment-indicator ${post.sentiment}`}>
+                  {post.sentiment}
+                </span>
               </div>
               
               <div className="post-meta">

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import './OceanWatch.css';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -6,7 +6,7 @@ import L from 'leaflet';
 import SocialFeed from './components/SocialAnalytics/SocialFeed';
 import sentimentService from './services/sentimentService';
 import analyticsService from './services/analyticsService';
-import chatbotNLP from './services/chatbotNLP'; // Add this import
+import chatbotNLP from './services/chatbotNLP';
 
 const getHazardColor = (type) => {
   const colors = {
@@ -176,26 +176,84 @@ const OceanWatch = () => {
         <FloatingChatbot onClose={() => setShowChatbot(false)} />
       )}
       
-      {/* Chatbot Button for Citizens */}
+      {/* Draggable Chatbot Button for Citizens */}
       {userRole === 'citizen' && !showChatbot && (
-        <button 
-          className="floating-chatbot-btn"
-          onClick={() => setShowChatbot(true)}
-        >
-          🤖 Chat
-        </button>
+        <DraggableChatbotButton onClick={() => setShowChatbot(true)} />
       )}
     </div>
   );
 };
 
-// Floating Chatbot Component - UPDATED VERSION
+// Draggable Chatbot Button Component
+const DraggableChatbotButton = ({ onClick }) => {
+  const [position, setPosition] = useState({ x: 20, y: 20 });
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartPos = useRef({ x: 0, y: 0 });
+
+  const handleMouseDown = (e) => {
+    setIsDragging(true);
+    dragStartPos.current = {
+      x: e.clientX - position.x,
+      y: e.clientY - position.y
+    };
+    e.preventDefault();
+  };
+
+  const handleMouseMove = (e) => {
+    if (!isDragging) return;
+    
+    setPosition({
+      x: e.clientX - dragStartPos.current.x,
+      y: e.clientY - dragStartPos.current.y
+    });
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  useEffect(() => {
+    if (isDragging) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
+    }
+  }, [isDragging]);
+
+  return (
+    <button 
+      className="floating-chatbot-btn"
+      onClick={onClick}
+      onMouseDown={handleMouseDown}
+      style={{
+        position: 'fixed',
+        left: `${position.x}px`,
+        top: `${position.y}px`,
+        cursor: isDragging ? 'grabbing' : 'grab',
+        zIndex: 1000
+      }}
+    >
+      🤖 Chat
+    </button>
+  );
+};
+
+// Floating Chatbot Component - ENHANCED VERSION
 const FloatingChatbot = ({ onClose }) => {
   const [messages, setMessages] = useState([
     { from: "bot", text: "Hi! I'm your Ocean Hazard Assistant. Ask me about ocean hazards 🌊" }
   ]);
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(true);
+  const [position, setPosition] = useState({ x: window.innerWidth - 400, y: 60 });
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartPos = useRef({ x: 0, y: 0 });
+  const chatContainerRef = useRef(null);
 
   const handleSend = () => {
     if (!input.trim()) return;
@@ -204,8 +262,9 @@ const FloatingChatbot = ({ onClose }) => {
     setMessages(prev => [...prev, { from: "user", text: input }]);
     setInput("");
     setIsTyping(true);
+    setShowSuggestions(false); // Hide suggestions after sending
 
-    // Process with NLP engine - USE YOUR ADVANCED NLP SERVICE
+    // Process with NLP engine
     setTimeout(() => {
       setIsTyping(false);
       const response = chatbotNLP.processInput(input);
@@ -219,6 +278,57 @@ const FloatingChatbot = ({ onClose }) => {
     }
   };
 
+  const handleSuggestionClick = (suggestion) => {
+    setInput(suggestion);
+    setShowSuggestions(false); // Hide suggestions when one is selected
+    setTimeout(() => handleSend(), 100);
+  };
+
+  const toggleExpand = () => {
+    setIsExpanded(!isExpanded);
+  };
+
+  const handleHeaderMouseDown = (e) => {
+    if (e.target.classList.contains('close-btn') || 
+        e.target.classList.contains('expand-btn') ||
+        e.target.closest('.close-btn') || 
+        e.target.closest('.expand-btn')) {
+      return;
+    }
+    
+    setIsDragging(true);
+    const rect = chatContainerRef.current.getBoundingClientRect();
+    dragStartPos.current = {
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top
+    };
+    e.preventDefault();
+  };
+
+  const handleMouseMove = (e) => {
+    if (!isDragging) return;
+    
+    setPosition({
+      x: e.clientX - dragStartPos.current.x,
+      y: e.clientY - dragStartPos.current.y
+    });
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  useEffect(() => {
+    if (isDragging) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
+    }
+  }, [isDragging]);
+
   // Quick replies focused on ocean safety
   const quickReplies = [
     "Tsunami safety tips",
@@ -230,9 +340,24 @@ const FloatingChatbot = ({ onClose }) => {
   ];
 
   return (
-    <div className="floating-chatbot">
-      <div className="chatbot-header">
-        <h3>🌊 Ocean Safety Assistant</h3>
+    <div 
+      className={`floating-chatbot ${isExpanded ? 'expanded' : ''}`}
+      ref={chatContainerRef}
+      style={{
+        position: 'fixed',
+        left: `${position.x}px`,
+        top: `${position.y}px`,
+        cursor: isDragging ? 'grabbing' : 'default',
+        zIndex: 1000
+      }}
+    >
+      <div className="chatbot-header" onMouseDown={handleHeaderMouseDown}>
+        <div className="header-left">
+          <h3>🌊 Ocean Safety Assistant</h3>
+          <button onClick={toggleExpand} className="expand-btn" title={isExpanded ? "Shrink" : "Expand"}>
+            {isExpanded ? '⊟' : '⊞'}
+          </button>
+        </div>
         <button onClick={onClose} className="close-btn">×</button>
       </div>
       
@@ -252,31 +377,47 @@ const FloatingChatbot = ({ onClose }) => {
         )}
       </div>
       
-      <div className="chat-suggestions">
-        <p style={{ margin: 0, fontSize: '12px', color: '#6c757d' }}>Ask about:</p>
-        <div className="suggestion-chips">
-          {quickReplies.map((suggestion, i) => (
+      {showSuggestions && (
+        <div className="chat-suggestions">
+          <div className="suggestions-header">
+            <p>Quick questions:</p>
             <button 
-              key={i} 
-              onClick={() => {
-                setInput(suggestion);
-                setTimeout(() => handleSend(), 100);
-              }}
+              onClick={() => setShowSuggestions(false)} 
+              className="hide-suggestions-btn"
+              title="Hide suggestions"
             >
-              {suggestion}
+              ×
             </button>
-          ))}
+          </div>
+          <div className="suggestion-chips">
+            {quickReplies.map((suggestion, i) => (
+              <button 
+                key={i} 
+                onClick={() => handleSuggestionClick(suggestion)}
+              >
+                {suggestion}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
       
       <div className="chatbot-input">
         <input 
-          value={input} 
-          onChange={(e) => setInput(e.target.value)}
+          value={input}
+          onChange={e => setInput(e.target.value)}
           onKeyPress={handleKeyPress}
-          placeholder="Ask about ocean safety..." 
+          placeholder="Ask about ocean safety..."
           disabled={isTyping}
+          onFocus={() => setShowSuggestions(false)} // Hide suggestions when typing
         />
+        <button 
+          onClick={() => setShowSuggestions(!showSuggestions)} 
+          className="suggestions-toggle"
+          title="Show suggestions"
+        >
+          💡
+        </button>
         <button onClick={handleSend} disabled={isTyping || !input.trim()}>
           Send
         </button>
@@ -809,6 +950,7 @@ const ReportForm = ({ userRole, setCurrentView }) => {
 };
 
 // Analytics Dashboard Component
+// Analytics Dashboard Component
 const AnalyticsDashboard = ({ reports, socialMediaData, hotspots }) => {
   const [analyticsData, setAnalyticsData] = useState(null);
 
@@ -831,6 +973,9 @@ const AnalyticsDashboard = ({ reports, socialMediaData, hotspots }) => {
   const sentimentPercentages = sentimentService.updateSentimentStats(socialMediaData);
   const sentimentCounts = sentimentService.getSentimentCounts();
 
+  // Calculate coordinate-based stats
+  const coordinateStats = calculateCoordinateStats(socialMediaData);
+
   return (
     <div className="analytics-dashboard">
       <h2>Analytics & Insights</h2>
@@ -852,6 +997,25 @@ const AnalyticsDashboard = ({ reports, socialMediaData, hotspots }) => {
         <div className="stat-card">
           <h3>{analyticsData.totalPosts}</h3>
           <p>Social Posts</p>
+        </div>
+      </div>
+      
+      {/* Coordinate-based Statistics */}
+      <div className="coordinate-stats-section">
+        <h3>Location-based Statistics</h3>
+        <div className="coordinate-grid">
+          {coordinateStats.topLocations.map(location => (
+            <div key={location.name} className="location-stat">
+              <h4>{location.name}</h4>
+              <p>{location.count} posts</p>
+              <div className="location-bar">
+                <div 
+                  className="location-fill" 
+                  style={{ width: `${(location.count / coordinateStats.maxCount) * 100}%` }}
+                ></div>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
       
@@ -964,6 +1128,26 @@ const AnalyticsDashboard = ({ reports, socialMediaData, hotspots }) => {
   );
 };
 
+// Helper function to calculate coordinate-based statistics
+const calculateCoordinateStats = (posts) => {
+  const locationCounts = {};
+  
+  posts.forEach(post => {
+    if (post.location) {
+      locationCounts[post.location] = (locationCounts[post.location] || 0) + 1;
+    }
+  });
+  
+  const topLocations = Object.entries(locationCounts)
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 5); // Top 5 locations
+    
+  const maxCount = Math.max(...topLocations.map(l => l.count), 1);
+  
+  return { topLocations, maxCount };
+};
+// Interactive Map Component
 // Interactive Map Component
 const InteractiveMap = ({ reports, hotspots, socialMediaData }) => {
   const [activeFilters, setActiveFilters] = useState({
@@ -972,6 +1156,33 @@ const InteractiveMap = ({ reports, hotspots, socialMediaData }) => {
     socialMedia: true,
     hotspots: true
   });
+
+  // Create custom icons for different types of markers
+  const createCustomIcon = (type, isHotspot = false) => {
+    const iconHtml = isHotspot 
+      ? `<div class="hotspot-marker">🔥</div>`
+      : `<div class="custom-marker ${type}">${getMarkerEmoji(type)}</div>`;
+    
+    return L.divIcon({
+      className: 'custom-icon',
+      html: iconHtml,
+      iconSize: [30, 30],
+      iconAnchor: [15, 15]
+    });
+  };
+
+  const getMarkerEmoji = (type) => {
+    const emojis = {
+      highWaves: '🌊',
+      flooding: '💧',
+      tsunami: '🌊',
+      erosion: '🏖️',
+      pollution: '☣️',
+      storm: '⛈️',
+      other: '⚠️'
+    };
+    return emojis[type] || '📍';
+  };
 
   return (
     <div className="interactive-map">
@@ -1000,11 +1211,21 @@ const InteractiveMap = ({ reports, hotspots, socialMediaData }) => {
 
             {/* Citizen & Official Reports */}
             {activeFilters.citizenReports && reports.map(report => (
-              <Marker key={`report-${report.id}`} position={[report.location.lat, report.location.lng]}>
+              <Marker 
+                key={`report-${report.id}`} 
+                position={[report.location.lat, report.location.lng]}
+                icon={createCustomIcon(report.type)}
+              >
                 <Popup>
-                  <strong>{formatReportType(report.type)}</strong><br />
-                  {report.description}<br />
-                  Reported by: {report.reporter}
+                  <div className="map-popup">
+                    <h4>{formatReportType(report.type)}</h4>
+                    <p>{report.description}</p>
+                    <div className="popup-details">
+                      <span className="reporter">Reported by: {report.reporter}</span>
+                      <span className={`urgency ${report.urgency}`}>{report.urgency} urgency</span>
+                      <span className="timestamp">{formatTime(report.timestamp)}</span>
+                    </div>
+                  </div>
                 </Popup>
               </Marker>
             ))}
@@ -1014,24 +1235,38 @@ const InteractiveMap = ({ reports, hotspots, socialMediaData }) => {
               <Marker 
                 key={`hotspot-${hotspot.id}`} 
                 position={[hotspot.location.lat, hotspot.location.lng]}
-                icon={L.divIcon({
-                  className: 'hotspot-marker',
-                  html: `<span>${hotspot.severity}</span>`
-                })}
+                icon={createCustomIcon('hotspot', true)}
               >
                 <Popup>
-                  <strong>Hotspot Severity: {hotspot.severity}</strong><br />
-                  {hotspot.reportCount} reports
+                  <div className="map-popup">
+                    <h4>Hotspot: {hotspot.severity} severity</h4>
+                    <p>{hotspot.reportCount} reports in this area</p>
+                    <div className="popup-details">
+                      <span className="coordinates">
+                        {hotspot.location.lat.toFixed(4)}, {hotspot.location.lng.toFixed(4)}
+                      </span>
+                    </div>
+                  </div>
                 </Popup>
               </Marker>
             ))}
 
             {/* Social Media */}
             {activeFilters.socialMedia && socialMediaData.map(post => (
-              <Marker key={`post-${post.id}`} position={[post.location.lat, post.location.lng]}>
+              <Marker 
+                key={`post-${post.id}`} 
+                position={[post.location.lat, post.location.lng]}
+                icon={createCustomIcon(post.analysis?.hazardType || 'other')}
+              >
                 <Popup>
-                  {post.text}<br />
-                  Sentiment: {post.sentiment}
+                  <div className="map-popup">
+                    <h4>Social Media Post</h4>
+                    <p>{post.text}</p>
+                    <div className="popup-details">
+                      <span className={`sentiment ${post.sentiment}`}>Sentiment: {post.sentiment}</span>
+                      <span className="hazard-type">Hazard: {post.analysis?.hazardType || 'other'}</span>
+                    </div>
+                  </div>
                 </Popup>
               </Marker>
             ))}
@@ -1078,6 +1313,31 @@ const InteractiveMap = ({ reports, hotspots, socialMediaData }) => {
                 <span className="filter-color hotspot"></span>
                 Hotspots
               </label>
+            </div>
+          </div>
+          
+          <div className="legend">
+            <h3>Legend</h3>
+            <div className="legend-item">
+              <span className="legend-icon">🌊</span> High Waves
+            </div>
+            <div className="legend-item">
+              <span className="legend-icon">💧</span> Flooding
+            </div>
+            <div className="legend-item">
+              <span className="legend-icon">⛈️</span> Storm
+            </div>
+            <div className="legend-item">
+              <span className="legend-icon">🏖️</span> Erosion
+            </div>
+            <div className="legend-item">
+              <span className="legend-icon">☣️</span> Pollution
+            </div>
+            <div className="legend-item">
+              <span className="legend-icon">🔥</span> Hotspots
+            </div>
+            <div className="legend-item">
+              <span className="legend-icon">📍</span> Social Media
             </div>
           </div>
           
