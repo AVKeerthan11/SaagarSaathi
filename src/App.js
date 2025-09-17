@@ -7,6 +7,15 @@ import SocialFeed from './components/SocialAnalytics/SocialFeed';
 import sentimentService from './services/sentimentService';
 import analyticsService from './services/analyticsService';
 import chatbotNLP from './services/chatbotNLP';
+import realTimeService from './services/realTimeService';
+
+// Fix for default markers in react-leaflet
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: require('leaflet/dist/images/marker-icon-2x.png'),
+  iconUrl: require('leaflet/dist/images/marker-icon.png'),
+  shadowUrl: require('leaflet/dist/images/marker-shadow.png'),
+});
 
 const getHazardColor = (type) => {
   const colors = {
@@ -14,6 +23,8 @@ const getHazardColor = (type) => {
     flooding: '#28a745',
     erosion: '#ffc107',
     storm: '#dc3545',
+    tsunami: '#ff6b35',
+    pollution: '#6f42c1',
     other: '#6c757d'
   };
   return colors[type] || '#6c757d';
@@ -27,9 +38,11 @@ const OceanWatch = () => {
   const [hotspots, setHotspots] = useState([]);
   const [socialMediaData, setSocialMediaData] = useState([]);
   const [showChatbot, setShowChatbot] = useState(false);
+  const [realTimeUpdates, setRealTimeUpdates] = useState(true);
 
-  // Sample data for demonstration
+  // Initialize with sample data and connect to real-time service
   useEffect(() => {
+    // Sample data for demonstration
     const mockReports = [
       {
         id: 1,
@@ -71,53 +84,59 @@ const OceanWatch = () => {
       { id: 2, location: { lat: 17.7233, lng: 83.3020 }, severity: 'medium', reportCount: 3 }
     ];
 
-    const mockSocialMedia = [
-      { 
-        id: 1, 
-        text: 'Huge waves at RK Beach today! #highwaves', 
-        sentiment: sentimentService.analyzeSentiment('Huge waves at RK Beach today! #highwaves'),
-        location: { lat: 17.6868, lng: 83.2185 }
-      },
-      { 
-        id: 2, 
-        text: 'Water level rising near the port area', 
-        sentiment: sentimentService.analyzeSentiment('Water level rising near the port area'),
-        location: { lat: 17.7233, lng: 83.3020 }
-      },
-      { 
-        id: 3, 
-        text: 'Beautiful day at the beach today!', 
-        sentiment: sentimentService.analyzeSentiment('Beautiful day at the beach today!'),
-        location: { lat: 17.7000, lng: 83.2800 }
-      }
-    ];
-    
-    const detectHazardType = (text) => {
-      const lowerText = text.toLowerCase();
-      if (lowerText.includes('wave')) return 'highWaves';
-      if (lowerText.includes('flood')) return 'flooding';
-      if (lowerText.includes('erosion')) return 'erosion';
-      if (lowerText.includes('storm')) return 'storm';
-      return 'other';
-    };
-
-    const enrichedSocialMedia = mockSocialMedia.map(post => {
-      const sentimentResult = post.sentiment;
-      return {
-        ...post,
-        sentiment: sentimentResult.sentiment,
-        confidence: sentimentResult.confidence,
-        analysis: {
-          hazardType: detectHazardType(post.text),
-          confidence: sentimentResult.confidence
-        }
-      };
-    });
-
-    setSocialMediaData(enrichedSocialMedia);
     setReports(mockReports);
     setHotspots(mockHotspots);
-  }, []);
+
+    // Connect to real-time service for social media updates
+    if (realTimeUpdates) {
+      realTimeService.connect();
+      
+      realTimeService.on('new_social_post', (newPost) => {
+        setSocialMediaData(prevData => {
+          // Add sentiment analysis to new post
+          const sentimentResult = sentimentService.analyzeSentiment(newPost.text);
+          const enrichedPost = {
+            ...newPost,
+            sentiment: sentimentResult.sentiment,
+            confidence: sentimentResult.confidence,
+            analysis: {
+              hazardType: detectHazardType(newPost.text),
+              confidence: sentimentResult.confidence
+            }
+          };
+          
+          // Keep only the latest 100 posts for performance
+          const updatedData = [enrichedPost, ...prevData];
+          return updatedData.length > 100 ? updatedData.slice(0, 100) : updatedData;
+        });
+      });
+
+      return () => {
+        realTimeService.disconnect();
+      };
+    }
+  }, [realTimeUpdates]);
+
+  const detectHazardType = (text) => {
+    const lowerText = text.toLowerCase();
+    if (lowerText.includes('wave') || lowerText.includes('current')) return 'highWaves';
+    if (lowerText.includes('flood') || lowerText.includes('water level')) return 'flooding';
+    if (lowerText.includes('erosion') || lowerText.includes('beach erosion')) return 'erosion';
+    if (lowerText.includes('storm') || lowerText.includes('warning')) return 'storm';
+    if (lowerText.includes('tsunami')) return 'tsunami';
+    if (lowerText.includes('pollution') || lowerText.includes('contamination')) return 'pollution';
+    return 'other';
+  };
+
+  // Toggle real-time updates
+  const toggleRealTimeUpdates = () => {
+    setRealTimeUpdates(!realTimeUpdates);
+    if (!realTimeUpdates) {
+      realTimeService.connect();
+    } else {
+      realTimeService.disconnect();
+    }
+  };
 
   // If official role selected but not logged in, show login
   if (userRole === 'official' && !isLoggedIn) {
@@ -132,6 +151,8 @@ const OceanWatch = () => {
         userRole={userRole}
         setUserRole={setUserRole}
         setIsLoggedIn={setIsLoggedIn}
+        realTimeUpdates={realTimeUpdates}
+        toggleRealTimeUpdates={toggleRealTimeUpdates}
       />
       
       <div className="main-content">
@@ -241,7 +262,7 @@ const DraggableChatbotButton = ({ onClick }) => {
   );
 };
 
-// Floating Chatbot Component - ENHANCED VERSION
+// Floating Chatbot Component
 const FloatingChatbot = ({ onClose }) => {
   const [messages, setMessages] = useState([
     { from: "bot", text: "Hi! I'm your Ocean Hazard Assistant. Ask me about ocean hazards 🌊" }
@@ -262,7 +283,7 @@ const FloatingChatbot = ({ onClose }) => {
     setMessages(prev => [...prev, { from: "user", text: input }]);
     setInput("");
     setIsTyping(true);
-    setShowSuggestions(false); // Hide suggestions after sending
+    setShowSuggestions(false);
 
     // Process with NLP engine
     setTimeout(() => {
@@ -280,7 +301,7 @@ const FloatingChatbot = ({ onClose }) => {
 
   const handleSuggestionClick = (suggestion) => {
     setInput(suggestion);
-    setShowSuggestions(false); // Hide suggestions when one is selected
+    setShowSuggestions(false);
     setTimeout(() => handleSend(), 100);
   };
 
@@ -409,7 +430,7 @@ const FloatingChatbot = ({ onClose }) => {
           onKeyPress={handleKeyPress}
           placeholder="Ask about ocean safety..."
           disabled={isTyping}
-          onFocus={() => setShowSuggestions(false)} // Hide suggestions when typing
+          onFocus={() => setShowSuggestions(false)}
         />
         <button 
           onClick={() => setShowSuggestions(!showSuggestions)} 
@@ -501,8 +522,8 @@ const LoginScreen = ({ setIsLoggedIn, setUserRole }) => {
   );
 };
 
-// Header Component
-const Header = ({ currentView, setCurrentView, userRole, setUserRole, setIsLoggedIn }) => {
+// Header Component with real-time toggle
+const Header = ({ currentView, setCurrentView, userRole, setUserRole, setIsLoggedIn, realTimeUpdates, toggleRealTimeUpdates }) => {
   const handleRoleSwitch = (role) => {
     setUserRole(role);
     if (role === 'citizen') {
@@ -579,6 +600,20 @@ const Header = ({ currentView, setCurrentView, userRole, setUserRole, setIsLogge
         </nav>
         
         <div className="user-controls">
+          {userRole === 'official' && (
+            <div className="real-time-toggle">
+              <label className="switch">
+                <input 
+                  type="checkbox" 
+                  checked={realTimeUpdates}
+                  onChange={toggleRealTimeUpdates}
+                />
+                <span className="slider round"></span>
+              </label>
+              <span className="toggle-label">Live Updates</span>
+            </div>
+          )}
+          
           <div className="role-selector">
             <select 
               value={userRole} 
@@ -663,7 +698,7 @@ const Dashboard = ({ reports, hotspots, socialMediaData }) => {
             <i className="fas fa-exclamation-triangle"></i>
           </div>
           <div className="stat-info">
-            <h3>{reports.length}</h3>
+            <h3>{reports ? reports.length : 0}</h3>
             <p>Total Reports</p>
             <span className="stat-change positive">+12% from last week</span>
           </div>
@@ -872,7 +907,7 @@ const ReportForm = ({ userRole, setCurrentView }) => {
                 <i className="fas fa-crosshairs"></i>
                 Use Current Location
               </button>
-                            <button type="button" className="location-btn">
+              <button type="button" className="location-btn">
                 <i className="fas fa-map-pin"></i>
                 Select on Map
               </button>
@@ -915,7 +950,7 @@ const ReportForm = ({ userRole, setCurrentView }) => {
             <h3>Final Step</h3>
             
             <div className="upload-section">
-              <label>Upload Photos or Videos (Optional</label>
+              <label>Upload Photos or Videos (Optional)</label>
               <div className="upload-area">
                 <i className="fas fa-cloud-upload-alt"></i>
                 <p>Click to browse or drag files here</p>
@@ -949,43 +984,85 @@ const ReportForm = ({ userRole, setCurrentView }) => {
   );
 };
 
-// Analytics Dashboard Component
-// Analytics Dashboard Component
+// Analytics Dashboard Component - ENHANCED
 const AnalyticsDashboard = ({ reports, socialMediaData, hotspots }) => {
   const [analyticsData, setAnalyticsData] = useState(null);
+  const [timeRange, setTimeRange] = useState('24h');
+  const [selectedHazard, setSelectedHazard] = useState('all');
 
   useEffect(() => {
     if (socialMediaData && socialMediaData.length > 0) {
-      const data = analyticsService.analyzePosts(socialMediaData);
+      const data = analyticsService.analyzePosts(socialMediaData, timeRange, selectedHazard);
       setAnalyticsData(data);
+    } else {
+      setAnalyticsData(null);
     }
-  }, [socialMediaData]);
+  }, [socialMediaData, timeRange, selectedHazard]);
+
+  // Filter social media data based on selected hazard
+  const filteredSocialData = selectedHazard === 'all' 
+    ? socialMediaData 
+    : socialMediaData.filter(post => post.analysis.hazardType === selectedHazard);
 
   if (!analyticsData) {
     return (
       <div className="analytics-dashboard">
-        <h2>Analytics & Insights</h2>
-        <p>Loading analytics data...</p>
+        <div className="analytics-header">
+          <h2>Analytics & Insights</h2>
+          <p>Loading analytics data...</p>
+        </div>
       </div>
     );
   }
 
-  const sentimentPercentages = sentimentService.updateSentimentStats(socialMediaData);
+  const sentimentPercentages = sentimentService.updateSentimentStats(filteredSocialData);
   const sentimentCounts = sentimentService.getSentimentCounts();
-
-  // Calculate coordinate-based stats
-  const coordinateStats = calculateCoordinateStats(socialMediaData);
 
   return (
     <div className="analytics-dashboard">
-      <h2>Analytics & Insights</h2>
+      <div className="analytics-header">
+        <h2>Analytics & Insights</h2>
+        
+        <div className="analytics-controls">
+          <div className="filter-control">
+            <label>Time Range:</label>
+            <select 
+              value={timeRange} 
+              onChange={(e) => setTimeRange(e.target.value)}
+              className="styled-select"
+            >
+              <option value="1h">Last Hour</option>
+              <option value="24h">Last 24 Hours</option>
+              <option value="7d">Last 7 Days</option>
+              <option value="30d">Last 30 Days</option>
+            </select>
+          </div>
+          
+          <div className="filter-control">
+            <label>Hazard Type:</label>
+            <select 
+              value={selectedHazard} 
+              onChange={(e) => setSelectedHazard(e.target.value)}
+              className="styled-select"
+            >
+              <option value="all">All Hazards</option>
+              <option value="highWaves">High Waves</option>
+              <option value="flooding">Flooding</option>
+              <option value="erosion">Erosion</option>
+              <option value="storm">Storm</option>
+              <option value="tsunami">Tsunami</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+        </div>
+      </div>
       
       {/* Stats Overview */}
       <div className="stats-overview">
-        <div className="stat-card">
+        {/* <div className="stat-card">
           <h3>{reports.length}</h3>
           <p>Total Reports</p>
-        </div>
+        </div> */}
         <div className="stat-card">
           <h3>{analyticsData.hazardPosts}</h3>
           <p>Hazard Mentions</p>
@@ -997,25 +1074,6 @@ const AnalyticsDashboard = ({ reports, socialMediaData, hotspots }) => {
         <div className="stat-card">
           <h3>{analyticsData.totalPosts}</h3>
           <p>Social Posts</p>
-        </div>
-      </div>
-      
-      {/* Coordinate-based Statistics */}
-      <div className="coordinate-stats-section">
-        <h3>Location-based Statistics</h3>
-        <div className="coordinate-grid">
-          {coordinateStats.topLocations.map(location => (
-            <div key={location.name} className="location-stat">
-              <h4>{location.name}</h4>
-              <p>{location.count} posts</p>
-              <div className="location-bar">
-                <div 
-                  className="location-fill" 
-                  style={{ width: `${(location.count / coordinateStats.maxCount) * 100}%` }}
-                ></div>
-              </div>
-            </div>
-          ))}
         </div>
       </div>
       
@@ -1094,61 +1152,36 @@ const AnalyticsDashboard = ({ reports, socialMediaData, hotspots }) => {
       {/* Social Media Monitoring */}
       <div className="social-analytics-section">
         <h3>Social Media Monitoring</h3>
-        <SocialFeed />
+        <SocialFeed socialMediaData={filteredSocialData} />
       </div>
 
-      {/* Timeline Data */}
-      <div className="timeline-section">
-        <h3>Activity Timeline (7 days)</h3>
-        <div className="timeline-chart">
-          {analyticsData.timeline.map((day, index) => (
-            <div key={index} className="timeline-item">
-              <div className="timeline-date">{day.date}</div>
-              <div className="timeline-bars">
-                <div 
-                  className="timeline-bar total" 
-                  style={{ height: `${(day.count / Math.max(...analyticsData.timeline.map(t => t.count))) * 50}px` }}
-                  title={`Total: ${day.count}`}
-                ></div>
-                <div 
-                  className="timeline-bar hazard" 
-                  style={{ height: `${(day.hazardCount / Math.max(...analyticsData.timeline.map(t => t.hazardCount || 1))) * 50}px` }}
-                  title={`Hazard: ${day.hazardCount}`}
-                ></div>
+      {/* Geographic Distribution */}
+      <div className="geographic-section">
+        <h3>Geographic Distribution</h3>
+        <div className="location-stats">
+          {analyticsData.topLocations && analyticsData.topLocations.length > 0 ? (
+            analyticsData.topLocations.map((location, index) => (
+              <div key={index} className="location-item">
+                <span className="location-name">{location.name}</span>
+                <div className="location-bar-container">
+                  <div 
+                    className="location-bar" 
+                    style={{ width: `${(location.count / Math.max(...analyticsData.topLocations.map(l => l.count))) * 100}%` }}
+                  ></div>
+                </div>
+                <span className="location-count">{location.count} posts</span>
               </div>
-            </div>
-          ))}
-        </div>
-        <div className="timeline-legend">
-          <span className="legend-total">Total Posts</span>
-          <span className="legend-hazard">Hazard Posts</span>
+            ))
+          ) : (
+            <p>No location data available</p>
+          )}
         </div>
       </div>
     </div>
   );
 };
 
-// Helper function to calculate coordinate-based statistics
-const calculateCoordinateStats = (posts) => {
-  const locationCounts = {};
-  
-  posts.forEach(post => {
-    if (post.location) {
-      locationCounts[post.location] = (locationCounts[post.location] || 0) + 1;
-    }
-  });
-  
-  const topLocations = Object.entries(locationCounts)
-    .map(([name, count]) => ({ name, count }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 5); // Top 5 locations
-    
-  const maxCount = Math.max(...topLocations.map(l => l.count), 1);
-  
-  return { topLocations, maxCount };
-};
-// Interactive Map Component
-// Interactive Map Component
+// Interactive Map Component - FIXED LATLNG ERROR
 const InteractiveMap = ({ reports, hotspots, socialMediaData }) => {
   const [activeFilters, setActiveFilters] = useState({
     citizenReports: true,
@@ -1184,6 +1217,12 @@ const InteractiveMap = ({ reports, hotspots, socialMediaData }) => {
     return emojis[type] || '📍';
   };
 
+  // Function to validate coordinates
+  const isValidCoordinate = (coord) => {
+    return coord && typeof coord.lat === 'number' && typeof coord.lng === 'number' && 
+           !isNaN(coord.lat) && !isNaN(coord.lng);
+  };
+
   return (
     <div className="interactive-map">
       <div className="map-header">
@@ -1209,66 +1248,72 @@ const InteractiveMap = ({ reports, hotspots, socialMediaData }) => {
               attribution="&copy; OpenStreetMap contributors"
             />
 
-            {/* Citizen & Official Reports */}
+            {/* Citizen & Official Reports - with coordinate validation */}
             {activeFilters.citizenReports && reports.map(report => (
-              <Marker 
-                key={`report-${report.id}`} 
-                position={[report.location.lat, report.location.lng]}
-                icon={createCustomIcon(report.type)}
-              >
-                <Popup>
-                  <div className="map-popup">
-                    <h4>{formatReportType(report.type)}</h4>
-                    <p>{report.description}</p>
-                    <div className="popup-details">
-                      <span className="reporter">Reported by: {report.reporter}</span>
-                      <span className={`urgency ${report.urgency}`}>{report.urgency} urgency</span>
-                      <span className="timestamp">{formatTime(report.timestamp)}</span>
+              isValidCoordinate(report.location) && (
+                <Marker 
+                  key={`report-${report.id}`} 
+                  position={[report.location.lat, report.location.lng]}
+                  icon={createCustomIcon(report.type)}
+                >
+                  <Popup>
+                    <div className="map-popup">
+                      <h4>{formatReportType(report.type)}</h4>
+                      <p>{report.description}</p>
+                      <div className="popup-details">
+                        <span className="reporter">Reported by: {report.reporter}</span>
+                        <span className={`urgency ${report.urgency}`}>{report.urgency} urgency</span>
+                        <span className="timestamp">{formatTime(report.timestamp)}</span>
+                      </div>
                     </div>
-                  </div>
-                </Popup>
-              </Marker>
+                  </Popup>
+                </Marker>
+              )
             ))}
 
-            {/* Hotspots */}
+            {/* Hotspots - with coordinate validation */}
             {activeFilters.hotspots && hotspots.map(hotspot => (
-              <Marker 
-                key={`hotspot-${hotspot.id}`} 
-                position={[hotspot.location.lat, hotspot.location.lng]}
-                icon={createCustomIcon('hotspot', true)}
-              >
-                <Popup>
-                  <div className="map-popup">
-                    <h4>Hotspot: {hotspot.severity} severity</h4>
-                    <p>{hotspot.reportCount} reports in this area</p>
-                    <div className="popup-details">
-                      <span className="coordinates">
-                        {hotspot.location.lat.toFixed(4)}, {hotspot.location.lng.toFixed(4)}
-                      </span>
+              isValidCoordinate(hotspot.location) && (
+                <Marker 
+                  key={`hotspot-${hotspot.id}`} 
+                  position={[hotspot.location.lat, hotspot.location.lng]}
+                  icon={createCustomIcon('hotspot', true)}
+                >
+                  <Popup>
+                    <div className="map-popup">
+                      <h4>Hotspot: {hotspot.severity} severity</h4>
+                      <p>{hotspot.reportCount} reports in this area</p>
+                      <div className="popup-details">
+                        <span className="coordinates">
+                          {hotspot.location.lat.toFixed(4)}, {hotspot.location.lng.toFixed(4)}
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                </Popup>
-              </Marker>
+                  </Popup>
+                </Marker>
+              )
             ))}
 
-            {/* Social Media */}
+            {/* Social Media - with coordinate validation */}
             {activeFilters.socialMedia && socialMediaData.map(post => (
-              <Marker 
-                key={`post-${post.id}`} 
-                position={[post.location.lat, post.location.lng]}
-                icon={createCustomIcon(post.analysis?.hazardType || 'other')}
-              >
-                <Popup>
-                  <div className="map-popup">
-                    <h4>Social Media Post</h4>
-                    <p>{post.text}</p>
-                    <div className="popup-details">
-                      <span className={`sentiment ${post.sentiment}`}>Sentiment: {post.sentiment}</span>
-                      <span className="hazard-type">Hazard: {post.analysis?.hazardType || 'other'}</span>
+              isValidCoordinate(post.coordinates) && (
+                <Marker 
+                  key={`post-${post.id}`} 
+                  position={[post.coordinates.lat, post.coordinates.lng]}
+                  icon={createCustomIcon(post.analysis?.hazardType || 'other')}
+                >
+                  <Popup>
+                    <div className="map-popup">
+                      <h4>Social Media Post</h4>
+                      <p>{post.text}</p>
+                      <div className="popup-details">
+                        <span className={`sentiment ${post.sentiment}`}>Sentiment: {post.sentiment}</span>
+                        <span className="hazard-type">Hazard: {post.analysis?.hazardType || 'other'}</span>
+                      </div>
                     </div>
-                  </div>
-                </Popup>
-              </Marker>
+                  </Popup>
+                </Marker>
+              )
             ))}
           </MapContainer>
         </div>
@@ -1343,7 +1388,7 @@ const InteractiveMap = ({ reports, hotspots, socialMediaData }) => {
           
           <div className="time-filter">
             <h3>Time Range</h3>
-            <select>
+            <select className="styled-select">
               <option>Last 24 hours</option>
               <option>Last 48 hours</option>
               <option>Last week</option>

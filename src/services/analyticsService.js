@@ -7,23 +7,18 @@ class AnalyticsService {
   }
 
   // Analyze multiple posts for overall metrics
-  analyzePosts(posts, userRole = 'citizen') {
-  // Only approved posts for citizens, all for officials
-  const filteredPosts = userRole === 'official'
-    ? posts
-    : posts.filter(post => post.status === 'approved');
-
-  const hazardPosts = filteredPosts.filter(post => post.analysis.hazardType !== 'other');
-  // ...rest of the function, replace 'posts' with 'filteredPosts'...
-  return {
-    totalPosts: filteredPosts.length,
-    hazardPosts: hazardPosts.length,
-    sentiment: this.calculateSentimentDistribution(filteredPosts),
-    hazardDistribution: this.calculateHazardDistribution(hazardPosts),
-    confidence: this.calculateConfidenceMetrics(hazardPosts),
-    timeline: this.generateTimelineData(filteredPosts)
-  };
-}
+  analyzePosts(posts) {
+    const hazardPosts = posts.filter(post => post.analysis.hazardType !== 'other');
+    
+    return {
+      totalPosts: posts.length,
+      hazardPosts: hazardPosts.length,
+      sentiment: this.calculateSentimentDistribution(posts),
+      hazardDistribution: this.calculateHazardDistribution(hazardPosts),
+      confidence: this.calculateConfidenceMetrics(hazardPosts),
+      timeline: this.generateTimelineData(posts)
+    };
+  }
 
   calculateSentimentDistribution(posts) {
     const sentiments = {
