@@ -68,3 +68,22 @@ This section has moved here: [https://facebook.github.io/create-react-app/docs/d
 ### `npm run build` fails to minify
 
 This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+
+### To run your application
+
+1] Unzip file and direct into main folder where both frontend and backend exists
+
+
+2]Direct to frontend and execute this Command : npm install
+                                                Warning : Donot audit the files
+
+3]Direct back to backend folder and execute command : npm install
+
+
+Open terminal:
+4]In backend folder run this command : node index.js
+
+
+In another terminal :
+5]Direct to frontend folder run this command : npm start 
+
